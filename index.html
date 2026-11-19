@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Billetera CLP — Control Personal</title>
+    
+    <!-- Meta Tags PWA y Móvil -->
+    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="Billetera CLP">
+    <meta name="description" content="Control minimalista de ingresos, gastos y balance en Pesos Chilenos (CLP).">
+    
+    <!-- Icono Apple Touch en SVG Data URI -->
+    <link rel="apple-touch-icon" href="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%23000000'/%3E%3Crect x='24' y='24' width='464' height='464' rx='96' fill='none' stroke='%23222222' stroke-width='12'/%3E%3Ctext x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-family='system-ui, -apple-system, sans-serif' font-weight='800' font-size='220' fill='%2310B981'%3E$%3C/text%3E%3C/svg%3E">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%23000000'/%3E%3Ctext x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' font-family='system-ui, -apple-system, sans-serif' font-weight='800' font-size='240' fill='%2310B981'%3E$%3C/text%3E%3C/svg%3E">
+    
+    <!-- Enlace dinámico para el Web App Manifest -->
+    <link id="pwa-manifest" rel="manifest" href="">
+
+    <!-- Fuente Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+                    },
+                    colors: {
+                        pureblack: '#000000',
+                        carddark: '#0A0A0A',
+                        cardelevated: '#111111',
+                        borderdark: '#222222',
+                        emeraldclp: '#10B981',
+                        coralclp: '#EF4444'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Inyección dinámica de Manifest PWA y Service Worker -->
+    <script>
+        (function setupPWA() {
+            const svgIcon = "data:image/svg+xml;utf8," + encodeURIComponent(
+                `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                    <rect width="512" height="512" rx="112" fill="#000000"/>
+                    <rect x="20" y="20" width="472" height="472" rx="96" fill="none" stroke="#222222" stroke-width="12"/>
+                    <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="800" font-size="220" fill="#10B981">$</text>
+                </svg>`
+            );
+
+            const manifestObj = {
+                name: "Billetera CLP — Control Personal",
+                short_name: "Billetera CLP",
+                description: "Control minimalista de ingresos, gastos y balance en Pesos Chilenos (CLP).",
+                start_url: window.location.href,
+                display: "standalone",
+                background_color: "#000000",
+                theme_color: "#000000",
+                orientation: "portrait",
+                icons: [
+                    { src: svgIcon, sizes: "192x192", type: "image/svg+xml", purpose: "any maskable" },
+                    { src: svgIcon, sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }
+                ]
+            };
+
+            try {
+                const manifestBlob = new Blob([JSON.stringify(manifestObj)], { type: 'application/manifest+json' });
+                const manifestUrl = URL.createObjectURL(manifestBlob);
+                document.getElementById('pwa-manifest').setAttribute('href', manifestUrl);
+            } catch (e) {
+                console.warn('No se pudo generar el manifest dinámico:', e);
+            }
+
+            // Registro de Service Worker vía Blob en entornos compatibles (HTTPS / localhost)
+            if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost')) {
+                const swCode = `
+                    const CACHE_NAME = 'billetera-clp-v1';
+                    self.addEventListener('install', (event) => {
+                        self.skipWaiting();
+                    });
+                    self.addEventListener('activate', (event) => {
+                        event.waitUntil(clients.claim());
+                    });
+                    self.addEventListener('fetch', (event) => {
+                        if (event.request.method !== 'GET') return;
+                        event.respondWith(
+                            fetch(event.request).catch(() => caches.match(event.request))
+                        );
+                    });
+                `;
+                try {
+                    const swBlob = new Blob([swCode], { type: 'application/javascript' });
+                    const swUrl = URL.createObjectURL(swBlob);
+                    navigator.serviceWorker.register(swUrl).catch(() => {
+                        // Algunos navegadores bloquean SW desde Blob URL en subdominios específicos; falla silenciosa segura
+                    });
+                } catch (err) {
+                    console.warn('Service Worker omitido:', err);
+                }
+            }
+        })();
+    </script>
+</head>
+<body class="bg-pureblack text-white font-sans antialiased min-h-screen selection:bg-emeraldclp selection:text-black">
+
+    <!-- Notificación Toast Flotante (Reemplaza alert()) -->
+    <div id="toast-container" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-md pointer-events-none transition-all duration-300 opacity-0 translate-y-4">
+        <div id="toast-box" class="bg-cardelevated border border-borderdark text-white px-4 py-3 rounded-xl shadow-2xl flex items-center justify-between gap-3">
+            <span id="toast-message" class="text-sm font-medium"></span>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmación de Eliminación -->
+    <div id="delete-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-carddark border border-borderdark rounded-2xl w-full max-w-sm p-6 space-y-5">
+            <div class="space-y-2">
+                <h3 class="text-lg font-bold text-white">Eliminar movimiento</h3>
+                <p id="delete-modal-desc" class="text-sm text-neutral-400">¿Estás seguro de que deseas eliminar este registro? Esta acción no se puede deshacer.</p>
+            </div>
+            <div class="flex items-center justify-end gap-3">
+                <button id="cancel-delete-btn" type="button" class="cursor-pointer px-4 py-2.5 rounded-xl bg-cardelevated border border-borderdark text-sm font-medium text-neutral-300 hover:text-white hover:border-neutral-600 transition-colors">
+                    Cancelar
+                </button>
+                <button id="confirm-delete-btn" type="button" class="cursor-pointer px-4 py-2.5 rounded-xl bg-coralclp text-sm font-semibold text-white hover:bg-red-600 transition-colors">
+                    Eliminar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Instrucciones PWA -->
+    <div id="pwa-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-carddark border border-borderdark rounded-2xl w-full max-w-md p-6 space-y-5">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-bold text-white">Instalar App en tu dispositivo</h3>
+                <button id="close-pwa-modal" type="button" class="cursor-pointer p-1.5 rounded-lg text-neutral-400 hover:text-white bg-cardelevated border border-borderdark">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="space-y-4 text-sm text-neutral-300">
+                <div class="p-3.5 rounded-xl bg-cardelevated border border-borderdark space-y-1.5">
+                    <p class="font-semibold text-white">En iPhone / iPad (Safari):</p>
+                    <p class="text-neutral-400 leading-relaxed">1. Toca el botón <strong class="text-white">Compartir</strong> (cuadrado con flecha hacia arriba) en la barra inferior.<br>2. Desliza y selecciona <strong class="text-white">"Agregar a inicio"</strong>.</p>
+                </div>
+                <div class="p-3.5 rounded-xl bg-cardelevated border border-borderdark space-y-1.5">
+                    <p class="font-semibold text-white">En Android (Chrome):</p>
+                    <p class="text-neutral-400 leading-relaxed">1. Toca el menú de tres puntos <strong class="text-white">(⋮)</strong> arriba a la derecha.<br>2. Selecciona <strong class="text-white">"Instalar aplicación"</strong> o <strong class="text-white">"Agregar a la pantalla principal"</strong>.</p>
+                </div>
+            </div>
+            <button id="native-install-btn" type="button" class="hidden cursor-pointer w-full py-3 rounded-xl bg-emeraldclp text-black font-bold text-sm hover:bg-emerald-400 transition-colors">
+                Instalar ahora directamente
+            </button>
+        </div>
+    </div>
+
+    <!-- Pantalla de Carga Inicial -->
+    <div id="loading-screen" class="min-h-screen flex flex-col items-center justify-center p-6">
+        <div class="w-10 h-10 border-2 border-borderdark border-t-emeraldclp rounded-full animate-spin mb-4"></div>
+        <p class="text-sm text-neutral-400 font-medium">Conectando cuenta personal...</p>
+    </div>
+
+    <!-- PANTALLA DE AUTENTICACIÓN (LOGIN / REGISTRO) -->
+    <div id="auth-screen" class="hidden min-h-screen flex flex-col items-center justify-center p-4 sm:p-6">
+        <div class="w-full max-w-md bg-carddark border border-borderdark rounded-2xl p-6 sm:p-8 space-y-6">
+            <!-- Encabezado Marca -->
+            <div class="space-y-2 text-center">
+                <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-cardelevated border border-borderdark text-emeraldclp font-extrabold text-2xl mb-1">
+                    $
+                </div>
+                <h1 class="text-2xl font-bold tracking-tight text-white">Billetera CLP</h1>
+                <p class="text-sm text-neutral-400">Control personal de ingresos y gastos en pesos chilenos.</p>
+            </div>
+
+            <!-- Tabs Iniciar Sesión / Crear Cuenta -->
+            <div class="grid grid-cols-2 p-1 bg-pureblack border border-borderdark rounded-xl">
+                <button id="tab-login" type="button" class="cursor-pointer py-2 text-sm font-semibold rounded-lg bg-cardelevated text-white transition-colors">
+                    Iniciar Sesión
+                </button>
+                <button id="tab-register" type="button" class="cursor-pointer py-2 text-sm font-semibold rounded-lg text-neutral-400 hover:text-white transition-colors">
+                    Crear Cuenta
+                </button>
+            </div>
+
+            <!-- Formulario Correo / Contraseña -->
+            <form id="auth-form" class="space-y-4">
+                <div id="name-field-container" class="hidden space-y-1.5">
+                    <label for="auth-name" class="block text-xs font-medium text-neutral-400 uppercase tracking-wider">Nombre o Alias</label>
+                    <input id="auth-name" type="text" placeholder="Ej. Camila Soto" class="w-full px-3.5 py-3 rounded-xl bg-pureblack border border-borderdark text-white text-sm placeholder-neutral-600 focus:outline-none focus:border-neutral-500 transition-colors">
+                </div>
+
+                <div class="space-y-1.5">
+                    <label for="auth-email" class="block text-xs font-medium text-neutral-400 uppercase tracking-wider">Correo Electrónico</label>
+                    <input id="auth-email" type="email" required placeholder="tu@correo.cl" class="w-full px-3.5 py-3 rounded-xl bg-pureblack border border-borderdark text-white text-sm placeholder-neutral-600 focus:outline-none focus:border-neutral-500 transition-colors">
+                </div>
+
+                <div class="space-y-1.5">
+                    <label for="auth-password" class="block text-xs font-medium text-neutral-400 uppercase tracking-wider">Contraseña</label>
+                    <input id="auth-password" type="password" required minlength="6" placeholder="Mínimo 6 caracteres" class="w-full px-3.5 py-3 rounded-xl bg-pureblack border border-borderdark text-white text-sm placeholder-neutral-600 focus:outline-none focus:border-neutral-500 transition-colors">
+                </div>
+
+                <button id="auth-submit-btn" type="submit" class="cursor-pointer w-full py-3 rounded-xl bg-white text-black font-semibold text-sm hover:bg-neutral-200 transition-colors">
+                    Entrar a mi cuenta
+                </button>
+            </form>
+
+            <!-- Separador -->
+            <div class="relative flex items-center py-1">
+                <div class="flex-grow border-t border-borderdark"></div>
+                <span class="flex-shrink mx-3 text-xs text-neutral-500 uppercase">o continuar con</span>
+                <div class="flex-grow border-t border-borderdark"></div>
+            </div>
+
+            <!-- Acceso con Google -->
+            <div class="space-y-2.5">
+                <button id="google-login-btn" type="button" class="cursor-pointer w-full py-3 px-4 rounded-xl bg-cardelevated border border-borderdark text-white font-medium text-sm hover:border-neutral-600 transition-colors flex items-center justify-center gap-3">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24">
+                        <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.8C6.2 7.2 8.9 5 12 5z"/>
+                        <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.7-.2-2.5H12v4.8h6.5c-.3 1.5-1.1 2.8-2.4 3.6l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"/>
+                        <path fill="#FBBC05" d="M5.3 14.8c-.2-.8-.4-1.6-.4-2.5s.2-1.7.4-2.5L1.6 7C.6 9 0 11.2 0 13.5s.6 4.5 1.6 6.5l3.7-2.8z"/>
+                        <path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.1-6.7-5l-3.7 2.8C3.5 21.1 7.4 24 12 24z"/>
+                    </svg>
+                    Continuar con Google
+                </button>
+
+                <button id="guest-login-btn" type="button" class="cursor-pointer w-full py-2.5 px-4 rounded-xl bg-transparent border border-borderdark text-neutral-400 font-medium text-xs hover:text-white hover:border-neutral-600 transition-colors">
+                    Acceso rápido de prueba (Cuenta local sincronizada)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PANEL PRINCIPAL DE LA APLICACIÓN -->
+    <div id="app-screen" class="hidden min-h-screen flex flex-col">
+        
+        <!-- Barra Superior -->
+        <header class="sticky top-0 z-30 bg-pureblack/90 backdrop-blur-md border-b border-borderdark">
+            <div class="max-w-3xl mx-auto px-4 py-3.5 flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <div class="w-9 h-9 rounded-xl bg-cardelevated border border-borderdark flex items-center justify-center text-emeraldclp font-extrabold text-lg shrink-0">
+                        $
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-sm font-bold text-white leading-tight truncate">Billetera CLP</h1>
+                        <p id="user-display" class="text-xs text-neutral-400 truncate">usuario@correo.cl</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 shrink-0">
+                    <button id="open-pwa-btn" type="button" title="Instalar como App" class="cursor-pointer px-3 py-2 rounded-xl bg-cardelevated border border-borderdark text-xs font-medium text-neutral-300 hover:text-white hover:border-neutral-600 transition-colors flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5 text-emeraldclp" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                        <span class="hidden sm:inline">Instalar App</span>
+                    </button>
+                    <button id="logout-btn" type="button" class="cursor-pointer px-3 py-2 rounded-xl bg-cardelevated border border-borderdark text-xs font-medium text-neutral-300 hover:text-coralclp hover:border-neutral-600 transition-colors">
+                        Salir
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Contenido Principal -->
+        <main class="flex-grow max-w-3xl w-full mx-auto px-4 py-6 space-y-6">
+            
+            <!-- TARJETAS DE RESUMEN -->
+            <section aria-label="Resumen financiero" class="space-y-3">
+                <!-- Balance Total Destacado -->
+                <div class="bg-carddark border border-borderdark rounded-2xl p-5 sm:p-6">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-neutral-400">Balance Total</span>
+                        <span class="text-[11px] font-medium px-2 py-0.5 rounded-md bg-cardelevated border border-borderdark text-neutral-400">CLP</span>
+                    </div>
+                    <div id="balance-amount" class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white tabular-nums">
+                        $0
+                    </div>
+                </div>
+
+                <!-- Ingresos y Gastos -->
+                <div class="grid grid-cols-2 gap-3">
+                    <!-- Total Ingresos -->
+                    <div class="bg-carddark border border-borderdark rounded-2xl p-4 sm:p-5">
+                        <div class="flex items-center gap-2 mb-1.5">
+                            <span class="w-2 h-2 rounded-full bg-emeraldclp"></span>
+                            <span class="text-xs font-medium text-neutral-400">Ingresos</span>
+                        </div>
+                        <div id="income-amount" class="text-xl sm:text-2xl font-bold text-emeraldclp tabular-nums truncate">
+                            $0
+                        </div>
+                    </div>
+
+                    <!-- Total Gastos -->
+                    <div class="bg-carddark border border-borderdark rounded-2xl p-4 sm:p-5">
+                        <div class="flex items-center gap-2 mb-1.5">
+                            <span class="w-2 h-2 rounded-full bg-coralclp"></span>
+                            <span class="text-xs font-medium text-neutral-400">Gastos</span>
+                        </div>
+                        <div id="expense-amount" class="text-xl sm:text-2xl font-bold text-coralclp tabular-nums truncate">
+                            $0
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- FORMULARIO RÁPIDO DE REGISTRO -->
+            <section aria-label="Registrar movimiento" class="bg-carddark border border-borderdark rounded-2xl p-5 sm:p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-base font-bold text-white">Nuevo Movimiento</h2>
+                </div>
+
+                <form id="transaction-form" class="space-y-4">
+                    <!-- Selector de Tipo (Ingreso / Gasto) -->
+                    <div class="grid grid-cols-2 gap-2 p-1 bg-pureblack border border-borderdark rounded-xl">
+                        <button type="button" id="type-expense-btn" data-type="expense" class="cursor-pointer py-2.5 rounded-lg text-sm font-semibold bg-coralclp text-white transition-colors">
+                            Gasto (-)
+                        </button>
+                        <button type="button" id="type-income-btn" data-type="income" class="cursor-pointer py-2.5 rounded-lg text-sm font-semibold text-neutral-400 hover:text-white transition-colors">
+                            Ingreso (+)
+                        </button>
+                    </div>
+
+                    <!-- Monto en CLP -->
+                    <div class="space-y-1.5">
+                        <label for="tx-amount" class="block text-xs font-medium text-neutral-400 uppercase tracking-wider">Monto en Pesos (CLP)</label>
+                        <div class="relative">
+                            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 font-bold text-lg">$</span>
+                            <input id="tx-amount" type="text" inputmode="numeric" required placeholder="15.000" autocomplete="off" class="w-full pl-9 pr-4 py-3.5 rounded-xl bg-pureblack border border-borderdark text-white text-xl font-bold placeholder-neutral-700 focus:outline-none focus:border-neutral-500 transition-colors tabular-nums">
+                        </div>
+                    </div>
+
+                    <!-- Descripción -->
+                    <div class="space-y-1.5">
+                        <label for="tx-description" class="block text-xs font-medium text-neutral-400 uppercase tracking-wider">Descripción</label>
+                        <input id="tx-description" type="text" required maxlength="60" placeholder="Ej. Supermercado, Sueldo, Bencina..." class="w-full px-3.5 py-3 rounded-xl bg-pureblack border border-borderdark text-white text-sm placeholder-neutral-600 focus:outline-none focus:border-neutral-500 transition-colors">
+                    </div>
+
+                    <!-- Categoría y Fecha -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="space-y-1.5">
+                            <label for="tx-category" class="block text-xs font-medium text-neutral-400 uppercase tracking-wider">Categoría</label>
+                            <select id="tx-category" class="cursor-pointer w-full px-3.5 py-3 rounded-xl bg-pureblack border border-borderdark text-white text-sm focus:outline-none focus:border-neutral-500 transition-colors">
+                                <option value="Alimentación">Alimentación</option>
+                                <option value="Transporte">Transporte</option>
+                                <option value="Hogar">Hogar</option>
+                                <option value="Sueldo">Sueldo</option>
+                                <option value="Otros">Otros</option>
+                            </select>
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <label for="tx-date" class="block text-xs font-medium text-neutral-400 uppercase tracking-wider">Fecha</label>
+                            <input id="tx-date" type="date" required class="cursor-pointer w-full px-3.5 py-3 rounded-xl bg-pureblack border border-borderdark text-white text-sm focus:outline-none focus:border-neutral-500 transition-colors [color-scheme:dark]">
+                        </div>
+                    </div>
+
+                    <!-- Botón Guardar -->
+                    <button id="save-tx-btn" type="submit" class="cursor-pointer w-full py-3.5 rounded-xl bg-white text-black font-bold text-sm hover:bg-neutral-200 transition-colors">
+                        Registrar Movimiento
+                    </button>
+                </form>
+            </section>
+
+            <!-- HISTORIAL DE MOVIMIENTOS -->
+            <section aria-label="Historial de movimientos" class="space-y-3 pb-10">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <h2 class="text-base font-bold text-white">Historial de Movimientos</h2>
+                    
+                    <!-- Filtros -->
+                    <div class="inline-flex p-1 bg-carddark border border-borderdark rounded-xl self-start sm:self-auto">
+                        <button type="button" data-filter="all" class="filter-btn cursor-pointer px-3 py-1.5 rounded-lg text-xs font-semibold bg-cardelevated text-white transition-colors">
+                            Todos
+                        </button>
+                        <button type="button" data-filter="income" class="filter-btn cursor-pointer px-3 py-1.5 rounded-lg text-xs font-semibold text-neutral-400 hover:text-white transition-colors">
+                            Ingresos
+                        </button>
+                        <button type="button" data-filter="expense" class="filter-btn cursor-pointer px-3 py-1.5 rounded-lg text-xs font-semibold text-neutral-400 hover:text-white transition-colors">
+                            Gastos
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Lista de Transacciones -->
+                <div id="transactions-list" class="space-y-2.5">
+                    <!-- Los ítems se renderizan dinámicamente aquí -->
+                </div>
+
+                <!-- Estado Vacío -->
+                <div id="empty-state" class="hidden bg-carddark border border-borderdark rounded-2xl p-8 text-center space-y-2">
+                    <p class="text-sm font-medium text-neutral-300">No hay movimientos registrados</p>
+                    <p class="text-xs text-neutral-500">Agrega tu primer ingreso o gasto en pesos chilenos arriba.</p>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Lógica Firebase Auth, Firestore y UI -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            signInWithCustomToken, 
+            signInAnonymously,
+            signInWithEmailAndPassword,
+            createUserWithEmailAndPassword,
+            updateProfile,
+            GoogleAuthProvider,
+            signInWithPopup,
+            signOut,
+            onAuthStateChanged 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            collection, 
+            doc, 
+            addDoc, 
+            deleteDoc, 
+            onSnapshot 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // ==========================================
+        // 1. CONFIGURACIÓN E INICIALIZACIÓN FIREBASE
+        // ==========================================
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'billetera-clp-pwa';
+        
+        // Configuración compatible con entorno integrado y despliegue externo (Vercel / GitHub Pages)
+        const defaultExternalConfig = {
+            apiKey: "AIzaSyDemoPlaceholderKeyParaDespliegue",
+            authDomain: "billetera-clp.firebaseapp.com",
+            projectId: "billetera-clp",
+            storageBucket: "billetera-clp.appspot.com",
+            messagingSenderId: "000000000000",
+            appId: "1:000000000000:web:0000000000000000"
+        };
+
+        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config) 
+            : defaultExternalConfig;
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // ==========================================
+        // 2. ESTADO DE LA APLICACIÓN
+        // ==========================================
+        let currentUser = null;
+        let transactions = [];
+        let unsubscribeSnapshot = null;
+        let currentTxType = 'expense'; // 'expense' | 'income'
+        let currentFilter = 'all'; // 'all' | 'income' | 'expense'
+        let authMode = 'login'; // 'login' | 'register'
+        let pendingDeleteId = null;
+        let deferredPrompt = null;
+
+        // ==========================================
+        // 3. FORMATEO DE MONEDA (PESOS CHILENOS - CLP)
+        // ==========================================
+        const clpFormatter = new Intl.NumberFormat('es-CL', {
+            style: 'currency',
+            currency: 'CLP',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        });
+
+        function formatCLP(amount, showSign = false) {
+            const num = Math.round(Number(amount) || 0);
+            const absFormatted = clpFormatter.format(Math.abs(num));
+            if (num < 0) return `-${absFormatted}`;
+            if (showSign && num > 0) return `+${absFormatted}`;
+            return absFormatted;
+        }
+
+        function parseRawCLP(str) {
+            const digits = String(str).replace(/\D/g, '');
+            return digits ? parseInt(digits, 10) : 0;
+        }
+
+        // ==========================================
+        // 4. UTILIDADES UI (TOASTS Y MODALES)
+        // ==========================================
+        let toastTimeout = null;
+        function showToast(message, isError = false) {
+            const container = document.getElementById('toast-container');
+            const box = document.getElementById('toast-box');
+            const msgEl = document.getElementById('toast-message');
+
+            msgEl.textContent = message;
+            box.className = `bg-cardelevated border ${isError ? 'border-coralclp text-coralclp' : 'border-borderdark text-white'} px-4 py-3 rounded-xl shadow-2xl flex items-center justify-between gap-3`;
+
+            container.classList.remove('opacity-0', 'translate-y-4');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                container.classList.add('opacity-0', 'translate-y-4');
+            }, 3200);
+        }
+
+        function setTodayDate() {
+            const dateInput = document.getElementById('tx-date');
+            const now = new Date();
+            const offset = now.getTimezoneOffset();
+            const localDate = new Date(now.getTime() - (offset * 60 * 1000));
+            dateInput.value = localDate.toISOString().split('T')[0];
+        }
+
+        // ==========================================
+        // 5. GESTIÓN DE AUTENTICACIÓN
+        // ==========================================
+        async function initAuth() {
+            try {
+                // Si existe token inicial del entorno, autenticar primero
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                }
+            } catch (error) {
+                console.error("Error en autenticación inicial:", error);
+            }
+
+            onAuthStateChanged(auth, (user) => {
+                document.getElementById('loading-screen').classList.add('hidden');
+                if (user) {
+                    currentUser = user;
+                    showAppScreen(user);
+                    subscribeToTransactions(user.uid);
+                } else {
+                    currentUser = null;
+                    if (unsubscribeSnapshot) {
+                        unsubscribeSnapshot();
+                        unsubscribeSnapshot = null;
+                    }
+                    transactions = [];
+                    showAuthScreen();
+                }
+            });
+        }
+
+        function showAuthScreen() {
+            document.getElementById('app-screen').classList.add('hidden');
+            document.getElementById('auth-screen').classList.remove('hidden');
+        }
+
+        function showAppScreen(user) {
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('app-screen').classList.remove('hidden');
+            
+            const displayLabel = user.displayName || user.email || (user.isAnonymous ? 'Cuenta Personal Invitada' : 'Usuario');
+            document.getElementById('user-display').textContent = displayLabel;
+            setTodayDate();
+        }
+
+        // Alternar pestañas Login / Registro
+        const tabLogin = document.getElementById('tab-login');
+        const tabRegister = document.getElementById('tab-register');
+        const nameFieldContainer = document.getElementById('name-field-container');
+        const authSubmitBtn = document.getElementById('auth-submit-btn');
+
+        tabLogin.addEventListener('click', () => {
+            authMode = 'login';
+            tabLogin.className = 'cursor-pointer py-2 text-sm font-semibold rounded-lg bg-cardelevated text-white transition-colors';
+            tabRegister.className = 'cursor-pointer py-2 text-sm font-semibold rounded-lg text-neutral-400 hover:text-white transition-colors';
+            nameFieldContainer.classList.add('hidden');
+            authSubmitBtn.textContent = 'Entrar a mi cuenta';
+        });
+
+        tabRegister.addEventListener('click', () => {
+            authMode = 'register';
+            tabRegister.className = 'cursor-pointer py-2 text-sm font-semibold rounded-lg bg-cardelevated text-white transition-colors';
+            tabLogin.className = 'cursor-pointer py-2 text-sm font-semibold rounded-lg text-neutral-400 hover:text-white transition-colors';
+            nameFieldContainer.classList.remove('hidden');
+            authSubmitBtn.textContent = 'Crear cuenta personal';
+        });
+
+        // Envío formulario Correo / Contraseña
+        document.getElementById('auth-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('auth-email').value.trim();
+            const password = document.getElementById('auth-password').value;
+            const name = document.getElementById('auth-name').value.trim();
+
+            authSubmitBtn.disabled = true;
+            authSubmitBtn.textContent = 'Procesando...';
+
+            try {
+                if (authMode === 'login') {
+                    await signInWithEmailAndPassword(auth, email, password);
+                    showToast('Sesión iniciada correctamente');
+                } else {
+                    const cred = await createUserWithEmailAndPassword(auth, email, password);
+                    if (name) {
+                        await updateProfile(cred.user, { displayName: name });
+                        document.getElementById('user-display').textContent = name;
+                    }
+                    showToast('Cuenta creada con éxito');
+                }
+            } catch (error) {
+                let msg = 'Error de autenticación. Verifica tus datos.';
+                if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+                    msg = 'Correo o contraseña incorrectos.';
+                } else if (error.code === 'auth/email-already-in-use') {
+                    msg = 'Este correo ya está registrado.';
+                } else if (error.code === 'auth/weak-password') {
+                    msg = 'La contraseña debe tener al menos 6 caracteres.';
+                } else if (error.code === 'auth/operation-not-allowed') {
+                    msg = 'Método no habilitado en Firebase. Usa el acceso rápido o Google.';
+                }
+                showToast(msg, true);
+            } finally {
+                authSubmitBtn.disabled = false;
+                authSubmitBtn.textContent = authMode === 'login' ? 'Entrar a mi cuenta' : 'Crear cuenta personal';
+            }
+        });
+
+        // Inicio de sesión con Google
+        document.getElementById('google-login-btn').addEventListener('click', async () => {
+            const provider = new GoogleAuthProvider();
+            try {
+                await signInWithPopup(auth, provider);
+                showToast('Conectado con Google');
+            } catch (error) {
+                if (error.code !== 'auth/popup-closed-by-user') {
+                    showToast('No se pudo iniciar con Google en este entorno. Usa correo o acceso rápido.', true);
+                }
+            }
+        });
+
+        // Acceso rápido anónimo sincronizado
+        document.getElementById('guest-login-btn').addEventListener('click', async () => {
+            try {
+                await signInAnonymously(auth);
+                showToast('Sesión personal iniciada');
+            } catch (error) {
+                showToast('Error al iniciar sesión rápida.', true);
+            }
+        });
+
+        // Cerrar sesión
+        document.getElementById('logout-btn').addEventListener('click', async () => {
+            try {
+                await signOut(auth);
+                showToast('Sesión cerrada');
+            } catch (error) {
+                showToast('Error al cerrar sesión', true);
+            }
+        });
+
+        // ==========================================
+        // 6. SINCRONIZACIÓN EN TIEMPO REAL (FIRESTORE)
+        // ==========================================
+        function subscribeToTransactions(userId) {
+            if (!userId) return;
+            if (unsubscribeSnapshot) unsubscribeSnapshot();
+
+            // Ruta privada estricta por usuario: /artifacts/{appId}/users/{userId}/transactions
+            const txCollectionRef = collection(db, 'artifacts', appId, 'users', userId, 'transactions');
+
+            unsubscribeSnapshot = onSnapshot(txCollectionRef, (snapshot) => {
+                const items = [];
+                snapshot.forEach((docSnap) => {
+                    items.push({
+                        id: docSnap.id,
+                        ...docSnap.data()
+                    });
+                });
+
+                // Orden cronológico inverso en memoria (más recientes primero)
+                items.sort((a, b) => {
+                    if (b.date !== a.date) {
+                        return b.date.localeCompare(a.date);
+                    }
+                    return (b.createdAt || 0) - (a.createdAt || 0);
+                });
+
+                transactions = items;
+                updateSummary();
+                renderTransactions();
+            }, (error) => {
+                console.error("Error leyendo transacciones de Firestore:", error);
+                showToast('Error de sincronización con la nube.', true);
+            });
+        }
+
+        // ==========================================
+        // 7. FORMULARIO Y OPERACIONES CRUD
+        // ==========================================
+        const typeExpenseBtn = document.getElementById('type-expense-btn');
+        const typeIncomeBtn = document.getElementById('type-income-btn');
+        const categorySelect = document.getElementById('tx-category');
+
+        function setTransactionType(type) {
+            currentTxType = type;
+            if (type === 'expense') {
+                typeExpenseBtn.className = 'cursor-pointer py-2.5 rounded-lg text-sm font-semibold bg-coralclp text-white transition-colors';
+                typeIncomeBtn.className = 'cursor-pointer py-2.5 rounded-lg text-sm font-semibold text-neutral-400 hover:text-white transition-colors';
+                if (categorySelect.value === 'Sueldo') categorySelect.value = 'Alimentación';
+            } else {
+                typeIncomeBtn.className = 'cursor-pointer py-2.5 rounded-lg text-sm font-semibold bg-emeraldclp text-black transition-colors';
+                typeExpenseBtn.className = 'cursor-pointer py-2.5 rounded-lg text-sm font-semibold text-neutral-400 hover:text-white transition-colors';
+                categorySelect.value = 'Sueldo';
+            }
+        }
+
+        typeExpenseBtn.addEventListener('click', () => setTransactionType('expense'));
+        typeIncomeBtn.addEventListener('click', () => setTransactionType('income'));
+
+        // Formateo automático en tiempo real del input numérico CLP (ej: 15000 -> 15.000)
+        const txAmountInput = document.getElementById('tx-amount');
+        txAmountInput.addEventListener('input', (e) => {
+            const rawValue = parseRawCLP(e.target.value);
+            if (rawValue === 0) {
+                e.target.value = '';
+            } else {
+                e.target.value = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 }).format(rawValue);
+            }
+        });
+
+        // Guardar movimiento
+        document.getElementById('transaction-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!currentUser) return;
+
+            const amount = parseRawCLP(txAmountInput.value);
+            const description = document.getElementById('tx-description').value.trim();
+            const category = categorySelect.value;
+            const date = document.getElementById('tx-date').value;
+
+            if (amount <= 0) {
+                showToast('Ingresa un monto mayor a $0', true);
+                txAmountInput.focus();
+                return;
+            }
+
+            if (!description) {
+                showToast('Ingresa una descripción', true);
+                return;
+            }
+
+            const saveBtn = document.getElementById('save-tx-btn');
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Guardando...';
+
+            try {
+                const txCollectionRef = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'transactions');
+                await addDoc(txCollectionRef, {
+                    type: currentTxType,
+                    amount: amount,
+                    description: description,
+                    category: category,
+                    date: date,
+                    createdAt: Date.now()
+                });
+
+                txAmountInput.value = '';
+                document.getElementById('tx-description').value = '';
+                showToast(`${currentTxType === 'income' ? 'Ingreso' : 'Gasto'} registrado: ${formatCLP(amount)}`);
+            } catch (error) {
+                console.error("Error guardando movimiento:", error);
+                showToast('No se pudo guardar el movimiento.', true);
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Registrar Movimiento';
+            }
+        });
+
+        // Eliminación con modal de confirmación
+        const deleteModal = document.getElementById('delete-modal');
+        const deleteModalDesc = document.getElementById('delete-modal-desc');
+
+        window.requestDeleteTransaction = function(id, desc, amount, type) {
+            pendingDeleteId = id;
+            const formatted = formatCLP(type === 'expense' ? -amount : amount);
+            deleteModalDesc.textContent = `¿Eliminar "${desc}" (${formatted})? Esta acción no se puede deshacer.`;
+            deleteModal.classList.remove('hidden');
+            deleteModal.classList.add('flex');
+        };
+
+        document.getElementById('cancel-delete-btn').addEventListener('click', () => {
+            pendingDeleteId = null;
+            deleteModal.classList.add('hidden');
+            deleteModal.classList.remove('flex');
+        });
+
+        document.getElementById('confirm-delete-btn').addEventListener('click', async () => {
+            if (!currentUser || !pendingDeleteId) return;
+            const idToDelete = pendingDeleteId;
+            pendingDeleteId = null;
+            deleteModal.classList.add('hidden');
+            deleteModal.classList.remove('flex');
+
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'transactions', idToDelete);
+                await deleteDoc(docRef);
+                showToast('Movimiento eliminado');
+            } catch (error) {
+                console.error("Error eliminando movimiento:", error);
+                showToast('Error al eliminar el registro.', true);
+            }
+        });
+
+        // ==========================================
+        // 8. RENDERIZADO DE RESUMEN E HISTORIAL
+        // ==========================================
+        function updateSummary() {
+            let totalIncome = 0;
+            let totalExpense = 0;
+
+            for (const tx of transactions) {
+                if (tx.type === 'income') {
+                    totalIncome += Number(tx.amount) || 0;
+                } else {
+                    totalExpense += Number(tx.amount) || 0;
+                }
+            }
+
+            const balance = totalIncome - totalExpense;
+
+            const balanceEl = document.getElementById('balance-amount');
+            balanceEl.textContent = formatCLP(balance);
+            balanceEl.className = `text-3xl sm:text-4xl font-extrabold tracking-tight tabular-nums ${
+                balance < 0 ? 'text-coralclp' : 'text-white'
+            }`;
+
+            document.getElementById('income-amount').textContent = formatCLP(totalIncome);
+            document.getElementById('expense-amount').textContent = formatCLP(totalExpense);
+        }
+
+        function formatDisplayDate(isoDateStr) {
+            if (!isoDateStr) return '';
+            const parts = isoDateStr.split('-');
+            if (parts.length !== 3) return isoDateStr;
+            const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+            const day = parseInt(parts[2], 10);
+            const monthIdx = parseInt(parts[1], 10) - 1;
+            return `${day} ${months[monthIdx] || parts[1]} ${parts[0]}`;
+        }
+
+        function renderTransactions() {
+            const listEl = document.getElementById('transactions-list');
+            const emptyEl = document.getElementById('empty-state');
+
+            const filtered = transactions.filter(tx => {
+                if (currentFilter === 'all') return true;
+                return tx.type === currentFilter;
+            });
+
+            if (filtered.length === 0) {
+                listEl.innerHTML = '';
+                emptyEl.classList.remove('hidden');
+                return;
+            }
+
+            emptyEl.classList.add('hidden');
+            listEl.innerHTML = filtered.map(tx => {
+                const isIncome = tx.type === 'income';
+                const signedAmount = isIncome ? formatCLP(tx.amount, true) : formatCLP(-tx.amount);
+                const amountColor = isIncome ? 'text-emeraldclp' : 'text-coralclp';
+                const safeDesc = escapeHTML(tx.description);
+                const safeCat = escapeHTML(tx.category || 'Otros');
+
+                return `
+                    <div class="bg-carddark border border-borderdark rounded-2xl p-4 flex items-center justify-between gap-3 hover:border-neutral-700 transition-colors">
+                        <div class="min-w-0 flex-1 space-y-1">
+                            <div class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full shrink-0 ${isIncome ? 'bg-emeraldclp' : 'bg-coralclp'}"></span>
+                                <p class="text-sm font-semibold text-white truncate">${safeDesc}</p>
+                            </div>
+                            <div class="flex items-center gap-2 text-xs text-neutral-400 pl-4">
+                                <span class="px-2 py-0.5 rounded-md bg-cardelevated border border-borderdark text-neutral-300 font-medium">${safeCat}</span>
+                                <span>•</span>
+                                <span>${formatDisplayDate(tx.date)}</span>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-3 shrink-0">
+                            <span class="text-sm sm:text-base font-bold tabular-nums ${amountColor}">
+                                ${signedAmount}
+                            </span>
+                            <button 
+                                type="button" 
+                                onclick="requestDeleteTransaction('${tx.id}', '${safeDesc.replace(/'/g, "\\'")}', ${tx.amount}, '${tx.type}')"
+                                title="Eliminar movimiento"
+                                aria-label="Eliminar movimiento"
+                                class="cursor-pointer p-2 rounded-xl bg-cardelevated border border-borderdark text-neutral-400 hover:text-coralclp hover:border-neutral-600 transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function escapeHTML(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        // Filtros del historial
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentFilter = btn.dataset.filter;
+                document.querySelectorAll('.filter-btn').forEach(b => {
+                    b.className = 'filter-btn cursor-pointer px-3 py-1.5 rounded-lg text-xs font-semibold text-neutral-400 hover:text-white transition-colors';
+                });
+                btn.className = 'filter-btn cursor-pointer px-3 py-1.5 rounded-lg text-xs font-semibold bg-cardelevated text-white transition-colors';
+                renderTransactions();
+            });
+        });
+
+        // ==========================================
+        // 9. SOPORTE DE INSTALACIÓN PWA EN UI
+        // ==========================================
+        const pwaModal = document.getElementById('pwa-modal');
+        const nativeInstallBtn = document.getElementById('native-install-btn');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            nativeInstallBtn.classList.remove('hidden');
+        });
+
+        document.getElementById('open-pwa-btn').addEventListener('click', () => {
+            pwaModal.classList.remove('hidden');
+            pwaModal.classList.add('flex');
+        });
+
+        document.getElementById('close-pwa-modal').addEventListener('click', () => {
+            pwaModal.classList.add('hidden');
+            pwaModal.classList.remove('flex');
+        });
+
+        nativeInstallBtn.addEventListener('click', async () => {
+            if (!deferredPrompt) return;
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') {
+                showToast('Aplicación instalada en tu dispositivo');
+            }
+            deferredPrompt = null;
+            nativeInstallBtn.classList.add('hidden');
+            pwaModal.classList.add('hidden');
+            pwaModal.classList.remove('flex');
+        });
+
+        // Iniciar aplicación
+        initAuth();
+    </script>
+</body>
+</html>
